@@ -3,7 +3,7 @@ physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 import numpy as np
-import gnn.gnn_utils as gnn_utils
+# import gnn.gnn_utils as gnn_utils
 # import gnn.GNN as GNN
 # from examples import Net_Simple
 
@@ -177,6 +177,8 @@ class Net(tf.keras.Model):
         self.output_l2 = self.output_dim
 
         self.k = tf.Variable(0,name='k')
+        
+        state_init = np.zeros((arcnode.dense_shape[0], state_dim))
         
         self.state = tf.Variable(state_init, name="state",dtype=tf.float32)
 
