@@ -1,8 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import gnn.gnn_utils as gnn_utils
-import gnn.GNN as GNN
-import Net_Simple as n
+from gnn.GNN import GNN as GraphNetwork
 
 import networkx as nx
 import scipy as sp
@@ -12,9 +11,8 @@ import matplotlib.pyplot as plt
 ##### GPU & stuff config
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
+physical_devices = tf.config.list_physical_devices('GPU') 
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 ############# data creation ################
 
@@ -83,7 +81,7 @@ N_tot = np.concatenate((N_tot, np.zeros((edges + edges_2,1), dtype=np.float32)),
 
 # Create Input to GNN
 
-inp, arcnode, graphnode = gnn_utils.from_EN_to_GNN(E, N_tot)
+inp, arcnode, nodegraph = gnn_utils.from_EN_to_GNN(E, N_tot)
 labels = np.random.randint(2, size=(N_tot.shape[0]))
 
 
@@ -95,47 +93,66 @@ labels = np.eye(max(labels)+1, dtype=np.int32)[labels]  # one-hot encoding of la
 ################################################################################################
 ################################################################################################
 
+
+EPSILON = 0.00000001
+
+@tf.function()
+def loss(target,output):
+    target = tf.cast(target,tf.float32)
+    output = tf.maximum(output, EPSILON, name="Avoiding_explosions")  # to avoid explosions
+    xent = -tf.reduce_sum(target * tf.math.log(output), 1)
+    lo = tf.reduce_mean(xent)
+    return lo
+
+@tf.function()
+def metric(output, target):
+    correct_prediction = tf.equal(tf.argmax(output, 1), tf.argmax(target, 1))
+    metric = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    return metric
+
 # set input and output dim, the maximum number of iterations, the number of epochs and the optimizer
 threshold = 0.01
 learning_rate = 0.01
 state_dim = 5
-tf.reset_default_graph()
 input_dim = inp.shape[1]
 output_dim = labels.shape[1]
 max_it = 50
-num_epoch = 10000
-optimizer = tf.train.AdamOptimizer
+num_epoch = 100
 
-# initialize state and output network
-net = n.Net(input_dim, state_dim, output_dim)
+def create_model():
+
+    comp_inp = tf.keras.Input(shape=(input_dim), name="input")
+    
+    gnn_layer = GraphNetwork(input_dim, state_dim, output_dim,
+                             hidden_state_dim = 15, hidden_output_dim = 10,
+                             ArcNode=arcnode,NodeGraph=None,threshold=threshold)
+    
+    output = gnn_layer(comp_inp)
+    
+    model = tf.keras.Model(comp_inp, output)
+
+    return model,gnn_layer
+
+
+tf.keras.backend.clear_session()
+model,GNNLayer = create_model()
 
 # initialize GNN
 param = "st_d" + str(state_dim) + "_th" + str(threshold) + "_lr" + str(learning_rate)
 print(param)
 
-tensorboard = False
+optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+for _ in range(num_epoch):
 
-g = GNN.GNN(net, input_dim, output_dim, state_dim,  max_it, optimizer, learning_rate, threshold, graph_based=False, param=param, config=config,
-            tensorboard=tensorboard)
+    with tf.GradientTape() as tape:
+        
+        out = model(inp,training=True)
 
-# train the model
-count = 0
+        loss_value = loss(labels,out)
 
-######
-
-for j in range(0, num_epoch):
-    _, it = g.Train(inputs=inp, ArcNode=arcnode, target=labels, step=count)
-
-    if count % 30 == 0:
-        print("Epoch ", count)
-        print("Training: ", g.Validate(inp, arcnode, labels, count))
-
-        # end = time.time()
-        # print("Epoch {} at time {}".format(j, end-start))
-        # start = time.time()
-
-    count = count + 1
-
-# evaluate on the test set
-# print("\nEvaluate: \n")
-# print(g.Evaluate(inp_test[0], arcnode_test[0], labels_test, nodegraph_test[0])[0])
+        grads = tape.gradient(loss_value, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        
+        if _ % 30 == 0:
+            print(loss_value.numpy())

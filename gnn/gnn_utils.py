@@ -5,6 +5,9 @@ import os
 from scipy.sparse import coo_matrix
 from collections import namedtuple
 import scipy.sparse as sp
+import gnn.load as ld
+
+
 SparseMatrix = namedtuple("SparseMatrix", "indices values dense_shape")
 
 def GetInput(mat, lab, batch=1, grafi=None):
@@ -72,7 +75,7 @@ def GetInput(mat, lab, batch=1, grafi=None):
         # for j in range(0, mt.shape[0]):
         #     arcnode[j][mt[j][0]] = 1
 
-        arcnode = SparseMatrix(indices=np.stack((mt[:, 0], np.arange(len(mt))), axis=1), values=np.ones([len(mt)]),
+        arcnode = SparseMatrix(indices=np.stack((mt[:, 0], np.arange(len(mt))), axis=1), values=np.ones([len(mt)]).astype(np.float32),
                                dense_shape=[max_id + 1, len(mt)])
 
         arcnode_batch.append(arcnode)
@@ -84,7 +87,7 @@ def GetInput(mat, lab, batch=1, grafi=None):
         #     val = adj[["graph"]].loc[(adj["id_1"] == t) | (adj["id_2"] == t)].values[0]
         #     nodegraph[t][val] = 1
 
-        nodegraph = SparseMatrix(indices=np.stack((dgr["graph"].values, np.arange(max_id+1)), axis=1), values=np.ones(max_id+1),
+        nodegraph = SparseMatrix(indices=np.stack((dgr["graph"].values, np.arange(max_id+1)), axis=1), values=np.ones(max_id+1).astype(np.float32),
                                dense_shape=[max_gr+1, max_id + 1])
 
 
@@ -129,7 +132,7 @@ def set_load_subgraph(data_path, set_type):
         exit(1)
 
 def set_load_clique(data_path, set_type):
-    import load as ld
+    
     # load adjacency list
     types = ["train", "validation", "test"]
     train = ld.loadmat(os.path.join(data_path, "cliquedataset.mat"))
@@ -208,7 +211,6 @@ def set_load_mutag(set_type, train):
 
 
 def set_load_general(data_path, set_type, set_name="sub_30_15"):
-    import load as ld
     # load adjacency list
     types = ["train", "validation", "test"]
     train = ld.loadmat(os.path.join(data_path, "{}.mat".format(set_name)))

@@ -1,18 +1,21 @@
+
 import tensorflow as tf
 import numpy as np
 import gnn.gnn_utils as gnn_utils
-import gnn.GNN as GNN
-import Net_Subgraph as n
+from gnn.GNN import GNN as GraphNetwork
+
 from scipy.sparse import coo_matrix
+from sklearn.preprocessing import StandardScaler
+
 
 ##### GPU & stuff config
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
+physical_devices = tf.config.list_physical_devices('GPU') 
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
 data_path = "./data"
-#data_path = "./Clique"
+
 set_name = "sub_15_7_200"
 ############# training set ################
 
@@ -29,42 +32,90 @@ inp_test, arcnode_test, nodegraph_test, nodein_test, labels_test, _ = gnn_utils.
 #inp_val, arcnode_val, nodegraph_val, nodein_val, labels_val = Library.set_load_subgraph(data_path, "valid")
 inp_val, arcnode_val, nodegraph_val, nodein_val, labels_val, _ = gnn_utils.set_load_general(data_path, "validation", set_name=set_name)
 
+EPSILON = 0.00000001
+
+@tf.function()
+def loss(target,output):
+    target = tf.cast(target,tf.float32)
+    output = tf.maximum(output, EPSILON, name="Avoiding_explosions")  # to avoid explosions
+    xent = -tf.reduce_sum(target * tf.math.log(output), 1)
+    lo = tf.reduce_mean(xent)
+    return lo
+
+@tf.function()
+def metric(output, target):
+    correct_prediction = tf.equal(tf.argmax(output, 1), tf.argmax(target, 1))
+    metric = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+
+    return metric
+
+
+inp = inp[0]
+
+arcnode=arcnode[0]
+
+nodegraph=nodegraph[0]
+
+inp_val = inp_val[0]
+
+arcnode_val = arcnode_val[0]
+
+nodegraph_val=nodegraph_val[0]
+
 # set input and output dim, the maximum number of iterations, the number of epochs and the optimizer
 
 threshold = 0.001
 learning_rate = 0.001
 state_dim = 10
 
-# set input and output dim, the maximum number of iterations, the number of epochs and the optimizer
-tf.reset_default_graph()
-
-input_dim = len(inp[0][0])
+input_dim = len(inp[0])
 output_dim = 2
 max_it = 50
-num_epoch = 5000
-optimizer = tf.train.AdamOptimizer
+num_epoch = 100
+
+def create_model():
+
+    comp_inp = tf.keras.Input(shape=(input_dim), name="input")
+    
+    layer = GraphNetwork(input_dim, state_dim, output_dim,                             
+                         hidden_state_dim = 5, hidden_output_dim = 5,
+                         ArcNode=arcnode,NodeGraph=None,threshold=threshold)
+    
+    output = layer(comp_inp)
+    
+    model = tf.keras.Model(comp_inp, output)
+
+    return model,layer
 
 
-# initialize state and output network
-net = n.Net(input_dim, state_dim, output_dim)
+tf.keras.backend.clear_session()
+model,GNNLayer = create_model()
 
 # initialize GNN
 param = "st_d" + str(state_dim) + "_th" + str(threshold) + "_lr" + str(learning_rate)
 print(param)
-g = GNN.GNN(net, max_it=max_it, input_dim=input_dim, output_dim=output_dim, state_dim=state_dim, optimizer=optimizer,
-            learning_rate=learning_rate, threshold=threshold, param=param, config=config)
-count = 0
 
-# train the model and validate every 30 epochs
-for j in range(0, num_epoch):
-    g.Train(inp[0], arcnode[0], labels, count, nodegraph[0])
+optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
-    if count % 30 == 0:
-        print("Epoch ", count)
-        print("Training: ", g.Validate(inp[0], arcnode[0], labels, count, nodegraph[0]))
-        print("Validation: ", g.Validate(inp_val[0], arcnode_val[0], labels_val, count, nodegraph_val[0]))
 
-    count = count + 1
+for count in range(0, num_epoch):
+    
+    with tf.GradientTape() as tape:
+        out = model(inp.astype(np.float32),training=True)
 
-# evaluate on the test set
-print(g.Evaluate(inp_test[0], arcnode_test[0], labels_test, nodegraph_test[0]))
+        loss_value = loss(labels,out)
+
+        grads = tape.gradient(loss_value, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+        if count % 30 == 0:
+            out_val = GNNLayer.predict_node(inp_val.astype(np.float32), arcnode_val)
+            loss_value_val = loss(labels_val,out_val)
+            
+            print("Epoch ", count)
+            print("Training: ", loss_value.numpy())
+            print("Validation: ",loss_value_val.numpy())
+
+        count = count + 1
+
