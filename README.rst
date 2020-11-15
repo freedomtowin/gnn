@@ -99,7 +99,9 @@ Bibtex::
 Contributions
 -------------
 
-The TensorFlow implementation was convert from TF1 to TF2, a contribution by Rohan Kotwani. We thank him and all the interested users!
+The TensorFlow implementation was convert from TF1 to TF2, a contribution by Rohan Kotwani. 
+In the `example folder <https://github.com/sailab-code/gnn/blob/master/examples/>`_ you can find the tentative implementation in Tensorflow 2, a contribution by `Rohan Kotwani <https://github.com/freedomtowin>`_.
+We thank him and all the interested users!
 
 License
 -------
