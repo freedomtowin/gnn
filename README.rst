@@ -97,6 +97,8 @@ Bibtex::
 
 
 Contributions
+-------------
+
 The TensorFlow implementation was convert from TF1 to TF2, a contribution by Rohan Kotwani. We thank him and all the interested users!
 
 License
