@@ -35,7 +35,7 @@ inp_val, arcnode_val, nodegraph_val, nodein_val, labels_val, _ = gnn_utils.set_l
 EPSILON = 0.00000001
 
 @tf.function()
-def loss(target,output):
+def loss_fcn(target,output):
     target = tf.cast(target,tf.float32)
     output = tf.maximum(output, EPSILON, name="Avoiding_explosions")  # to avoid explosions
     xent = -tf.reduce_sum(target * tf.math.log(output), 1)
@@ -70,48 +70,31 @@ output_dim = 2
 max_it = 50
 num_epoch = 500
 
-def create_model():
-
-    comp_inp = tf.keras.Input(shape=(input_dim), name="input")
-    
-    layer = GraphNetwork(input_dim, state_dim, output_dim,                             
-                         hidden_state_dim = 15, hidden_output_dim = 10,
-                         ArcNode=arcnode,NodeGraph=None,threshold=threshold)
-    
-    output = layer(comp_inp)
-    
-    model = tf.keras.Model(comp_inp, output)
-
-    return model,layer
-
-
-tf.keras.backend.clear_session()
-model,GNNLayer = create_model()
 
 # initialize GNN
 param = "st_d" + str(state_dim) + "_th" + str(threshold) + "_lr" + str(learning_rate)
 print(param)
 
+
+model = GraphNetwork(input_dim, state_dim, output_dim,                             
+                         hidden_state_dim = 15, hidden_output_dim = 10,
+                         ArcNode=arcnode,NodeGraph=None,threshold=threshold)
+
 optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+model.compile(optimizer,loss_fcn)
+
 
 
 for count in range(0, num_epoch):
+    loss_value = model.train_step(inp.astype(np.float32),labels)
     
-    with tf.GradientTape() as tape:
-        out = model(inp.astype(np.float32),training=True)
+    if count % 30 == 0:
+        #this runs the loop without training
+        out_val = model.predict(inp_val.astype(np.float32), arcnode_val)
+        loss_value_val = loss_fcn(labels_val,out_val)
 
-        loss_value = loss(labels,out)
-
-        grads = tape.gradient(loss_value, model.trainable_variables)
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
-
-        if count % 30 == 0:
-            #this runs the loop without training
-            out_val = GNNLayer.predict_node(inp_val.astype(np.float32), arcnode_val)
-            loss_value_val = loss(labels_val,out_val)
-            
-            print("Epoch ", count)
-            print("Training: ", loss_value.numpy())
-            print("Validation: ",loss_value_val.numpy())
+        print("Epoch ", count)
+        print("Training: ", loss_value.numpy())
+        print("Validation: ",loss_value_val.numpy())
 
         count = count + 1

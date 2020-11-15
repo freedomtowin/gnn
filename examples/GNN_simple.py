@@ -14,7 +14,7 @@ import os
 physical_devices = tf.config.list_physical_devices('GPU') 
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-############# data creation ################
+############# data creatiohttp://localhost:8888/notebooks/gnn/Simple.ipynb#n ################
 
 # GRAPH #1
 
@@ -97,7 +97,7 @@ labels = np.eye(max(labels)+1, dtype=np.int32)[labels]  # one-hot encoding of la
 EPSILON = 0.00000001
 
 @tf.function()
-def loss(target,output):
+def loss_fcn(target,output):
     target = tf.cast(target,tf.float32)
     output = tf.maximum(output, EPSILON, name="Avoiding_explosions")  # to avoid explosions
     xent = -tf.reduce_sum(target * tf.math.log(output), 1)
@@ -120,39 +120,24 @@ output_dim = labels.shape[1]
 max_it = 50
 num_epoch = 100
 
-def create_model():
-
-    comp_inp = tf.keras.Input(shape=(input_dim), name="input")
-    
-    gnn_layer = GraphNetwork(input_dim, state_dim, output_dim,
-                             hidden_state_dim = 15, hidden_output_dim = 10,
-                             ArcNode=arcnode,NodeGraph=None,threshold=threshold)
-    
-    output = gnn_layer(comp_inp)
-    
-    model = tf.keras.Model(comp_inp, output)
-
-    return model,gnn_layer
-
-
-tf.keras.backend.clear_session()
-model,GNNLayer = create_model()
-
 # initialize GNN
 param = "st_d" + str(state_dim) + "_th" + str(threshold) + "_lr" + str(learning_rate)
 print(param)
 
+
+model = GraphNetwork(input_dim, state_dim, output_dim,                             
+                         hidden_state_dim = 15, hidden_output_dim = 10,
+                         ArcNode=arcnode,NodeGraph=None,threshold=threshold)
+
+optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+model.compile(optimizer,loss_fcn)
+
+
 optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 for _ in range(num_epoch):
+    
+    loss_value = model.train_step(inp,labels)
 
-    with tf.GradientTape() as tape:
-        
-        out = model(inp,training=True)
 
-        loss_value = loss(labels,out)
-
-        grads = tape.gradient(loss_value, model.trainable_variables)
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        
-        if _ % 30 == 0:
-            print(loss_value.numpy())
+    if _ % 30 == 0:
+        print(loss_value.numpy())

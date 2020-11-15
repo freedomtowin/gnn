@@ -36,7 +36,7 @@ class GNN(tf.keras.Model):
             self.NodeGraph = tf.sparse.SparseTensor(indices=NodeGraph.indices, values=NodeGraph.values,
                                         dense_shape=NodeGraph.dense_shape)
 
-        
+        self.inp = tf.keras.Input(shape=(input_dim), name="input")
         
         self.state_init = np.zeros((ArcNode.dense_shape[0], state_dim))
         
@@ -54,7 +54,11 @@ class GNN(tf.keras.Model):
         
         
         
-
+    def compile(self, optimizer, loss_fn):
+        super(GNN, self).compile()
+        self.optimizer = optimizer
+        self.loss_fn = loss_fn      
+       
     def convergence(self, a, state, old_state, k):
 
         # assign current state to old state
@@ -95,9 +99,8 @@ class GNN(tf.keras.Model):
         c2 = tf.less(k, self.max_iter)
 
         return tf.logical_and(c1, c2)
-        
-
-    def call(self, comp_inp,training=True):
+    
+    def call(self, comp_inp):
 
         k = tf.constant(0)
 
@@ -137,10 +140,24 @@ class GNN(tf.keras.Model):
         layer_2_out = self.layer_2_out(layer_1_out)
     
         return layer_2_out
-    
-    
-    def predict_node(self, comp_inp, ArcNode, NodeGraph=None):
 
+    def train_step(self, comp_inp, labels,mask=None):
+        
+        with tf.GradientTape() as tape:
+            
+            output = self.call(comp_inp)
+            if mask is None:
+                loss_value = self.loss_fn(labels,output)
+            else:
+                loss_value = self.loss_fn(labels,output,mask=mask)
+                
+            grads = tape.gradient(loss_value, self.trainable_variables)
+            self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
+    
+        return loss_value
+    
+    
+    def predict(self, comp_inp, ArcNode, NodeGraph=None):
         
         TrainArcNode = self.ArcNode
         

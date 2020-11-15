@@ -47,7 +47,7 @@ for fold in range(1, 11):
 EPSILON = 0.00000001
 
 @tf.function()
-def loss(target,output):
+def loss_fcn(target,output):
     target = tf.cast(target,tf.float32)
     output = tf.maximum(output, EPSILON, name="Avoiding_explosions")  # to avoid explosions
     xent = -tf.reduce_sum(target * tf.math.log(output), 1)
@@ -71,20 +71,6 @@ max_it = 50
 num_epoch = 500
 output_dim = 2
 
-
-def create_model(arcnode,nodegraph):
-
-    comp_inp = tf.keras.Input(shape=(input_dim), name="input")
-    
-    layer = GraphNetwork(input_dim, state_dim, output_dim,                             
-                         hidden_state_dim = 5, hidden_output_dim = 5,
-                         ArcNode=arcnode,NodeGraph=nodegraph,threshold=threshold)
-    
-    output = layer(comp_inp)
-    
-    model = tf.keras.Model(comp_inp, output)
-
-    return model,layer
 
 
 
@@ -126,10 +112,12 @@ for fold in range(0, 10):
 
     
     tf.keras.backend.clear_session()
-    model,GNNLayer = create_model(arcnode,nodegraph)
-
+    model = GraphNetwork(input_dim, state_dim, output_dim,                             
+                             hidden_state_dim = 15, hidden_output_dim = 10,
+                             ArcNode=arcnode,NodeGraph=nodegraph,threshold=threshold)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    model.compile(optimizer,loss_fcn)
 
     # train GNN, and validate every 2 epochs, (early stopping)
     count = 0
@@ -139,24 +127,18 @@ for fold in range(0, 10):
     for j in range(0, num_epoch):
 
         with tf.GradientTape() as tape:
-            out = model(inp.astype(np.float32),training=True)
-
-            loss_value = loss(labels,out)
-
-            grads = tape.gradient(loss_value, model.trainable_variables)
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))
+            loss_value = model.train_step(inp.astype(np.float32),labels)
 
             #early stopping
             if count % 2 == 0:
-                out_val = GNNLayer.predict_node(inp_val.astype(np.float32), arcnode_val,nodegraph_val)
-                loss_value_val = loss(labels_val,out_val)
+                out_val = model.predict(inp_val.astype(np.float32), arcnode_val,nodegraph_val)
+                loss_value_val = loss_fcn(labels_val,out_val)
                 
                 if count == 0:
                     valid_best = loss_value_val
 
                 if loss_value_val < valid_best:
                     valid_best = loss_value_val
-                    #save_path = g.saver.save(g.session, g.save_path)
                     patience = 0
                 else:
                     patience += 1
@@ -184,7 +166,7 @@ for fold in range(0, 10):
 
     # evaluate on the test set fold
     
-    out_test = GNNLayer.predict_node(inp_test, arcnode_test, nodegraph_test)
+    out_test = model.predict(inp_test, arcnode_test, nodegraph_test)
     metric_value_test = metric(labels_test,out_test)
     testacc.append(metric_value_test.numpy())
     print(metric_value_test.numpy())
@@ -197,4 +179,3 @@ for fold in range(0, 10):
 # mean accuracy on the 10-fold
 mean_acc = np.mean(np.asarray(testacc))
 print('Mean accuracy from all folds:', mean_acc)
-
