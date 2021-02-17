@@ -7,6 +7,13 @@ This repo contains a Tensorflow implementation of the Graph Neural Network model
 - **Website (including documentation):** https://mtiezzi.github.io/gnn_site/
 - **Authors:** `Matteo Tiezzi <http://sailab.diism.unisi.it/people/matteo-tiezzi/>`_, `Alberto Rossi <http://sailab.diism.unisi.it/people/alberto-rossi/>`_
 
+Contributions
+-------------
+
+In the example folder, file  `GNN_SimpleNet_TF2.py <https://github.com/sailab-code/gnn/blob/master/examples/GNN_SimpleNet_TF2.py>`_ you can find a tentative all-in-one implementation in Tensorflow 2, a contribution by `Rohan Kotwani <https://github.com/freedomtowin>`_ .
+We thank him and all the interested users!
+
+
 Install
 -------
 
