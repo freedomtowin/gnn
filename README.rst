@@ -3,6 +3,8 @@ Graph Neural Network Model
 
 This repo contains a Tensorflow implementation of the Graph Neural Network model.
 
+** On Nov 15, 2020, Rohan Kotwani converted this package from using TF v1 to using TF v2. Please see the Contribution notes below. **
+
 
 - **Website (including documentation):** https://mtiezzi.github.io/gnn_site/
 - **Authors:** `Matteo Tiezzi <http://sailab.diism.unisi.it/people/matteo-tiezzi/>`_, `Alberto Rossi <http://sailab.diism.unisi.it/people/alberto-rossi/>`_
